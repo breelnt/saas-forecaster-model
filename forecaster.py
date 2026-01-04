@@ -1,34 +1,34 @@
 import pandas as pd
 
-class DualForecaster:
-    def __init__(self, metrics):
-        self.metrics = metrics
+class BusinessForecaster:
+    def __init__(self, actuals):
+        self.data = actuals
 
-    def run_comparison(self, months=24, price_mod=0.0, spend_mod=0.0):
-        # Initial States
-        mrr_trend = self.metrics['current_mrr']
-        mrr_pred = self.metrics['current_mrr']
+    def predict(self, months, price_change, budget_change):
+        # Apply logic
+        new_price = self.data['avg_bill'] * (1 + price_change)
+        new_cost_per_customer = self.data['cost_per_customer'] * (1 + (budget_change * 0.4))
+        monthly_budget = (self.data['monthly_revenue'] * 0.20) * (1 + budget_change)
+        new_loss_rate = self.data['loss_rate'] + (price_change * 0.05)
         
-        # Predictive Adjustments
-        adj_arpu = self.metrics['avg_arpu'] * (1 + price_mod)
-        adj_churn = self.metrics['base_churn'] + (price_mod * 0.05)
-        adj_cac = self.metrics['avg_cac'] * (1 + (spend_mod * 0.4))
-        budget = (mrr_pred * 0.15) * (1 + spend_mod) # Budget as 15% of Revenue
-
-        data = []
+        running_rev = self.data['monthly_revenue']
+        forecast = []
+        
         for m in range(1, months + 1):
-            # PATH A: The Simple Organic Trend (Status Quo)
-            mrr_trend = mrr_trend * (1 + self.metrics['organic_momentum'])
+            start_rev = running_rev
+            customers_gained = monthly_budget / new_cost_per_customer
+            revenue_gained = customers_gained * new_price
+            revenue_lost = start_rev * new_loss_rate
+            end_rev = start_rev + revenue_gained - revenue_lost
             
-            # PATH B: The Predictive Model (Strategic Intervention)
-            new_rev = (budget / adj_cac) * adj_arpu
-            loss = mrr_pred * adj_churn
-            mrr_pred = mrr_pred + new_rev - loss
-            
-            data.append({
-                "Month": m,
-                "Organic_Trend": mrr_trend,
-                "Predictive_Simulation": mrr_pred
+            forecast.append({
+                "Month": f"Month {m}",
+                "Revenue at Start": round(start_rev, 0),
+                "Marketing Investment": round(monthly_budget, 0),
+                "New Sales Revenue": round(revenue_gained, 0),
+                "Lost Sales Revenue": round(revenue_lost, 0),
+                "Revenue at End": round(end_rev, 0)
             })
+            running_rev = end_rev
             
-        return pd.DataFrame(data)
+        return pd.DataFrame(forecast)
