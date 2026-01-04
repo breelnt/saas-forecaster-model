@@ -1,26 +1,27 @@
-import plotly.express as px
+import plotly.graph_objects as go
 
-def plot_growth_forecast(df):
-    """
-    Creates a simple line chart showing predicted revenue growth.
-    """
-    fig = px.line(
-        df, 
-        x="Month", 
-        y="Revenue at End",
-        labels={
-            "Revenue at End": "Monthly Revenue ($)",
-            "Month": "Timeframe"
-        },
-        title="Predicted Revenue Growth"
-    )
-    
-    # Clean, professional styling
+def plot_comparison_chart(history_df, forecast_df):
+    fig = go.Figure()
+
+    # 1. Past Performance
+    fig.add_scatter(x=history_df['Month'], y=history_df['Revenue'], 
+                    name="Past Revenue", line=dict(color="black", width=3))
+
+    # 2. Future: Status Quo (The Simple Trend)
+    future_dates = [f"Month +{m}" for m in forecast_df['Month']]
+    fig.add_scatter(x=future_dates, y=forecast_df['Status Quo'], 
+                    name="Organic Trend (Status Quo)", 
+                    line=dict(color="gray", dash='dash'))
+
+    # 3. Future: Strategic Strategy (The Prediction)
+    fig.add_scatter(x=future_labels, y=forecast_df['Strategic Strategy'], 
+                    name="Strategic Prediction", 
+                    line=dict(color="#2E86C1", width=4))
+
     fig.update_layout(
+        title="Revenue Forecast: Status Quo vs. Strategic Prediction",
         template="plotly_white",
-        hovermode="x unified",
         yaxis_tickprefix="$",
-        yaxis_tickformat=","
+        hovermode="x unified"
     )
-    
     return fig

@@ -1,34 +1,43 @@
 import pandas as pd
 
-class BusinessForecaster:
+class StrategicForecaster:
     def __init__(self, actuals):
-        self.data = actuals
+        self.a = actuals
 
-    def predict(self, months, price_change, budget_change):
-        # Apply logic
-        new_price = self.data['avg_bill'] * (1 + price_change)
-        new_cost_per_customer = self.data['cost_per_customer'] * (1 + (budget_change * 0.4))
-        monthly_budget = (self.data['monthly_revenue'] * 0.20) * (1 + budget_change)
-        new_loss_rate = self.data['loss_rate'] + (price_change * 0.05)
+    def run_simulation(self, months, price_mods, budget_change):
+        # Setup starting points
+        mrr_trend = self.a['monthly_revenue']
+        mrr_pred = self.a['monthly_revenue']
         
-        running_rev = self.data['monthly_revenue']
-        forecast = []
+        # Strategy Logic
+        # We assume marketing spend is split across products
+        budget = (self.a['monthly_revenue'] * 0.15) * (1 + budget_change)
         
+        # Calculate a weighted new price based on the product mix and specific sliders
+        # price_mods is a dict: {'Basic': 0.1, 'Pro': 0.05, ...}
+        current_weights = self.a['products'].set_index('Product')['Annual Revenue']
+        current_weights = current_weights / current_weights.sum()
+        
+        avg_price_mod = sum([price_mods[p] * current_weights.get(p, 0) for p in price_mods])
+        new_avg_price = self.a['products']['Monthly Price'].mean() * (1 + avg_price_mod)
+        
+        # Risk factors
+        new_loss_rate = self.a['loss_rate'] + (avg_price_mod * 0.1) # Aggressive pricing increases loss
+        new_cac = self.a['cost_per_customer'] * (1 + (budget_change * 0.4))
+
+        results = []
         for m in range(1, months + 1):
-            start_rev = running_rev
-            customers_gained = monthly_budget / new_cost_per_customer
-            revenue_gained = customers_gained * new_price
-            revenue_lost = start_rev * new_loss_rate
-            end_rev = start_rev + revenue_gained - revenue_lost
+            # Path 1: Simple Organic Trend (Status Quo)
+            mrr_trend = mrr_trend * (1 + self.a['momentum'])
             
-            forecast.append({
-                "Month": f"Month {m}",
-                "Revenue at Start": round(start_rev, 0),
-                "Marketing Investment": round(monthly_budget, 0),
-                "New Sales Revenue": round(revenue_gained, 0),
-                "Lost Sales Revenue": round(revenue_lost, 0),
-                "Revenue at End": round(end_rev, 0)
+            # Path 2: Strategic Prediction
+            new_sales = (budget / new_cac) * new_avg_price
+            losses = mrr_pred * new_loss_rate
+            mrr_pred = mrr_pred + new_sales - losses
+            
+            results.append({
+                "Month": m,
+                "Status Quo": mrr_trend,
+                "Strategic Strategy": mrr_pred
             })
-            running_rev = end_rev
-            
-        return pd.DataFrame(forecast)
+        return pd.DataFrame(results)

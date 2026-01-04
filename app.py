@@ -1,71 +1,75 @@
 import streamlit as st
 from data_processor import get_business_actuals
-from forecaster import BusinessForecaster
-import visuals as vis  # <--- Importing your design file
+from forecaster import StrategicForecaster
+import plotly.graph_objects as go
 
-# Page Configuration
-st.set_page_config(page_title="Business Growth Simulator", layout="wide")
+st.set_page_config(page_title="Executive Revenue Strategy", layout="wide")
 
-# 1. Load historical numbers
-try:
-    actuals = get_business_actuals()
-except:
-    st.error("Missing data files. Please check your repository for customers.csv, revenue.csv, and subscriptions.csv.")
-    st.stop()
+actuals = get_business_actuals()
 
-# 2. Header and Introduction
-st.title("Business Growth Simulator")
-st.markdown("""
-This tool shows exactly how much money the business is making today and predicts 
-where we will be in one year based on your decisions.
-""")
+# Header
+st.title("Business Growth Strategy Simulator")
+st.markdown("This tool allows you to simulate the financial outcome of changes to your product pricing and marketing investments.")
 
-# 3. Where the Business Stands Today
+# Section 1: Business Overview
 st.markdown("### Where the Business Stands Today")
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Yearly Revenue", f"${actuals['yearly_revenue']:,.0f}")
-c2.metric("Profitability Score", f"{actuals['profit_score']:.1f}x")
-c3.metric("Cost per New Customer", f"${actuals['cost_per_customer']:,.0f}")
-c4.metric("Customer Loss Rate", f"{actuals['loss_rate']:.1%}")
+c1, c2, c3 = st.columns([1, 1, 2])
+
+with c1:
+    st.metric("Total Yearly Revenue", f"${actuals['yearly_revenue']:,.0f}")
+    st.metric("Cost to Acquire a Customer", f"${actuals['cost_per_customer']:,.0f}")
+
+with c2:
+    st.metric("Profitability Score", f"{actuals['profit_score']:.1f}x")
+    st.write(f"For every $1.00 spent on marketing, we earn ${actuals['profit_score']:.2f} in total customer value.")
+
+with c3:
+    st.markdown("**Current Product Mix**")
+    st.table(actuals['products'].style.format({"Monthly Price": "${:,.0f}", "Annual Revenue": "${:,.0f}"}))
 
 st.markdown("---")
 
-# 4. Strategic Levers (Sidebar)
-st.sidebar.header("Business Strategy")
-st.sidebar.markdown("Adjust these sliders to see how your choices impact the bottom line.")
+# Section 2: Strategy Levers (Sidebar)
+st.sidebar.header("Pricing Strategy per Product")
+p_basic = st.sidebar.slider("Basic Plan Price Change (%)", -10, 50, 0) / 100
+p_pro = st.sidebar.slider("Pro Plan Price Change (%)", -10, 50, 0) / 100
+p_ent = st.sidebar.slider("Enterprise Plan Price Change (%)", -10, 50, 0) / 100
 
-price_lever = st.sidebar.slider("Increase Prices by (%)", 0, 50, 0) / 100
-spend_lever = st.sidebar.slider("Increase Marketing Budget by (%)", 0, 200, 0) / 100
+st.sidebar.markdown("---")
+st.sidebar.header("Marketing Investment")
+budget_lever = st.sidebar.slider("Change Marketing Budget (%)", -50, 200, 0) / 100
 
-# 5. Run the Prediction
-engine = BusinessForecaster(actuals)
-forecast_df = engine.predict(12, price_lever, spend_lever)
+# Section 3: Strategic Comparison
+engine = StrategicForecaster(actuals)
+price_mods = {'Basic': p_basic, 'Pro': p_pro, 'Enterprise': p_ent}
+forecast_df = engine.run_simulation(12, price_mods, budget_lever)
 
-# 6. Display the Chart from visuals.py
-st.markdown("### Predicted Growth")
-# We call the function from our visuals.py file here
-st.plotly_chart(vis.plot_growth_forecast(forecast_df), use_container_width=True)
+st.markdown("### Strategic Growth Prediction")
+st.markdown("The blue line shows the result of your strategy. The dashed gray line shows where the business would go if no changes were made.")
 
-# 7. Monthly Breakdown
-st.markdown("### Month-by-Month Breakdown")
-st.markdown("This table shows exactly how we get from our starting revenue to our goal.")
+# Chart Logic
+fig = go.Figure()
+fig.add_scatter(x=actuals['history']['Month'], y=actuals['history']['Revenue'], name="Historical Revenue", line=dict(color="black", width=2))
+future_labels = [f"Month +{m}" for m in forecast_df['Month']]
+fig.add_scatter(x=future_labels, y=forecast_df['Status Quo'], name="Status Quo (No Change)", line=dict(color="gray", dash='dash'))
+fig.add_scatter(x=future_labels, y=forecast_df['Strategic Strategy'], name="Strategic Prediction", line=dict(color="#00CC96", width=4))
+fig.update_layout(template="plotly_white", yaxis_tickprefix="$")
+st.plotly_chart(fig, use_container_width=True)
 
-st.dataframe(forecast_df.style.format({
-    "Revenue at Start": "${:,.0f}",
-    "Marketing Investment": "${:,.0f}",
-    "New Sales Revenue": "${:,.0f}",
-    "Lost Sales Revenue": "${:,.0f}",
-    "Revenue at End": "${:,.0f}"
-}), use_container_width=True)
-
-# 8. Final Executive Summary
+# Section 4: Summary Comparison
 st.markdown("---")
-final_yearly = forecast_df.iloc[-1]['Revenue at End'] * 12
-growth_total = final_yearly - actuals['yearly_revenue']
+st.markdown("### Strategy Comparison")
+col_a, col_b, col_c = st.columns(3)
+
+status_quo_final = forecast_df.iloc[-1]['Status Quo'] * 12
+strategic_final = forecast_df.iloc[-1]['Strategic Strategy'] * 12
+variance = strategic_final - status_quo_final
+
+col_a.metric("Status Quo Yearly Revenue", f"${status_quo_final:,.0f}")
+col_b.metric("Strategic Yearly Revenue", f"${strategic_final:,.0f}")
+col_c.metric("Revenue Impact of Strategy", f"${variance:,.0f}", f"{(variance/status_quo_final):.1%}")
 
 st.markdown(f"""
-### The Bottom Line
-Under this plan, your yearly revenue is predicted to grow from 
-**${actuals['yearly_revenue']:,.0f}** to **${final_yearly:,.0f}**. 
-This is an increase of **${growth_total:,.0f}** over the next 12 months.
+**Summary:** By adjusting your product pricing and marketing budget, you are projected to generate an additional 
+**${variance:,.0f}** in yearly revenue compared to your current growth trajectory.
 """)
